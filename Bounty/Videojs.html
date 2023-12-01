@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.11.7/video-js.min.css" rel="stylesheet" />
+    <title>Test VideoJS DRM</title>
+    <style>
+        .vjs-chapter-marker {
+            position: absolute;
+            height: 8px;
+            width: 2px;
+            background-color: #007bff;
+            top: 40%;
+            z-index: 10;
+            cursor: pointer;
+        }
+        .vjs-chapter-overlay {
+            position: absolute;
+            height: 100%;
+            background-color: transparent;
+            top: 0;
+            z-index: 5;
+            cursor: pointer;
+        }
+        .vjs-chapter-tooltip {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px;
+            color: #fff;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 4px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s;
+            z-index: 20;
+        }
+        .vjs-chapter-tooltip.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .segment-buttons {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .segment-button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            margin: 0 5px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .segment-button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div style="margin: 50px auto;">
+        <video id="my-video" class="video-js"></video>
+    </div>
+
+    <div class="segment-buttons"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.11.7/video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-eme@3.8.0/dist/videojs-contrib-eme.js"></script>
+
+    <script>
+        var player = videojs('my-video', {
+            controls: true,
+            fluid: true,
+            html5: {
+                vhs: { overrideNative: true }
+            }
+        });
+
+        player.eme();
+        player.src({
+            src: 'https://cdn.bitmovin.com/content/assets/art-of-motion_drm/mpds/11331.mpd',
+            type: 'application/dash+xml',
+            keySystems: {
+                'com.widevine.alpha': 'https://cwip-shaka-proxy.appspot.com/no_auth',
+            }
+        });
+
+        // Define video segments
+        const videoSegments = [
+            { start: 0, end: 60, title: "Introduction" },
+            { start: 61, end: 120, title: "Chapter 1" },
+            { start: 121, end: 180, title: "Chapter 2" },
+            { start: 181, end: 205, title: "Chapter 3" }
+        ];
+
+        // Listen for time updates on the player
+        player.on('timeupdate', function () {
+            const currentTime = player.currentTime();
+            updateTitle(currentTime);
+        });
+
+        function scrollToSegment(startTime) {
+            player.currentTime(startTime);
+        }
+
+        player.ready(function () {
+            player.on('loadedmetadata', function () {
+                const duration = player.duration();
+                const segmentButtonsContainer = document.querySelector('.segment-buttons');
+
+                videoSegments.forEach(segment => {
+                    const segmentButton = document.createElement('button');
+                    segmentButton.textContent = segment.title;
+                    segmentButton.classList.add('segment-button');
+                    segmentButton.onclick = function () {
+                        scrollToSegment(segment.start);
+                    };
+                    segmentButtonsContainer.appendChild(segmentButton);
+
+                    const startPosition = (segment.start / duration) * 100;
+                    const endPosition = (segment.end / duration) * 100;
+
+                    const marker = document.createElement('div');
+                    marker.classList.add('vjs-chapter-marker');
+                    marker.style.left = `${endPosition}%`;
+
+                    const overlay = document.createElement('div');
+                    overlay.classList.add('vjs-chapter-overlay');
+                    overlay.style.left = `${startPosition}%`;
+                    overlay.style.width = `${endPosition - startPosition}%`;
+                    overlay.onclick = function () {
+                        scrollToSegment(segment.start);
+                    };
+
+                    const tooltip = document.createElement('div');
+                    tooltip.classList.add('vjs-chapter-tooltip');
+                    tooltip.textContent = segment.title;
+                    overlay.appendChild(tooltip);
+
+                    const progressControl = player.el().querySelector('.vjs-progress-control');
+                    progressControl.appendChild(marker);
+                    progressControl.appendChild(overlay);
+                });
+            });
+        });
+
+        function updateTitle(currentTime) {
+            const currentSegment = videoSegments.find(segment =>
+                currentTime >= segment.start && currentTime <= segment.end
+            );
+            if (currentSegment) {
+                const tooltips = document.querySelectorAll('.vjs-chapter-tooltip');
+                tooltips.forEach(tooltip => {
+                    if (tooltip.textContent === currentSegment.title) {
+                        tooltip.classList.add('show');
+                    } else {
+                        tooltip.classList.remove('show');
+                    }
+                });
+            } else {
+                const tooltips = document.querySelectorAll('.vjs-chapter-tooltip');
+                tooltips.forEach(tooltip => {
+                    tooltip.classList.remove('show');
+                });
+            }
+        }
+    </script>
+</body>
+</html>
